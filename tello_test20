@@ -1,0 +1,126 @@
+import sys
+from PyQt5.QtWidgets import QApplication, QWidget, QDesktopWidget, QPushButton, QLabel
+import cv2
+import numpy as np
+import socket
+from djitellopy import Tello
+
+tello_address = ('192.168.10.1', 8889)
+video_address = ('0.0.0.0', 11111)
+
+def connect():
+    try:
+        # Путь к изображению
+        image_path = r'C:\Users\ploty\OneDrive\Изображения\2323'
+
+        # Загрузка изображения
+        image = cv2.imread(image_path)
+
+        # Проверка, удалось ли загрузить изображение
+        if image is not None:
+            # Создание окна
+            cv2.namedWindow('videosream', cv2.WINDOW_NORMAL)
+
+            # Отображение изображения в окне
+            cv2.imshow('2323', 2323)
+
+            # Ожидание нажатия клавиши для закрытия окна
+            cv2.waitKey(0)
+
+            # Закрытие окна
+            cv2.destroyAllWindows()
+        else:
+            print("Не удалось загрузить изображение")
+
+        label.setText("Подключено")
+        # Создание UDP-сокета для отправки команд к Tello
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+
+        # Подключение к Tello
+        sock.sendto(b'command', tello_address)
+
+        # Создание UDP-сокета для прослушивания видеопотока Tello
+        video_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        video_socket.bind(video_address)
+    except Exception as e:
+        label.setText("Ошибка: " + str(e))
+
+def video_stream():
+    try:
+        label.setText("Подрубленно")
+        # Отправка команды для включения видеопотока
+        sock.sendto(b'streamon', tello_address)
+
+        # Цикл для получения и отображения видеопотока
+        while True:
+            try:
+                # Получение видеоданных от Tello
+                data, _ = video_socket.recvfrom(2048)
+
+                # Пропуск первых 2 байтов (заголовок)
+                frame = data[2:]
+
+                # Декодирование видеокадра
+                frame = np.frombuffer(frame, dtype=np.uint8)
+                frame = cv2.imdecode(frame, cv2.IMREAD_UNCHANGED)
+
+                # Отображение видеокадра
+                cv2.imshow('Tello Video Stream', frame)
+
+                # Если нажата клавиша 'q', выход из цикла
+                if cv2.waitKey(1) & 0xFF == ord('q'):
+                    break
+
+            except KeyboardInterrupt:
+                break
+    except Exception as e:
+        label.setText("Ошибка: " + str(e))
+
+def exit_program():
+    try:
+        # Отправка команды для выключения видеопотока
+        sock.sendto(b'streamoff', tello_address)
+
+        # Закрытие соединений и окон
+        sock.close()
+        video_socket.close()
+        cv2.destroyAllWindows()
+
+        # Выход из приложения (закрытие всех окон)
+        sys.exit()
+    except Exception as e:
+        label.setText("Ошибка: " + str(e))
+
+app = QApplication(sys.argv)
+
+# Создание окна
+window = QWidget()
+window.setWindowTitle("Подключение к IP")
+window.resize(800, 600)
+
+# Центрирование окна на экране
+screen = QDesktopWidget().screenGeometry()
+window.move((screen.width() - window.width()) // 2, ((screen.height() - window.height()) // 2) - 100)
+
+# Создание кнопки "Подключиться"
+connect_button = QPushButton("Подключиться", window)
+connect_button.clicked.connect(connect)
+connect_button.setGeometry(250, 300, 100, 40)
+
+# Создание кнопки "Выход"
+exit_button = QPushButton("Выйти", window)
+exit_button.clicked.connect(exit_program)
+exit_button.setGeometry(400, 300, 100, 40)
+
+# Создание кнопки "Видеопоток"
+video_stream_button = QPushButton("Видеострим", window)
+video_stream_button.clicked.connect(video_stream)
+video_stream_button.setGeometry(250, 400, 100, 40)
+
+# Создание пустой метки
+label = QLabel(window)
+label.setGeometry(330, 220, 100, 40)
+
+window.show()
+
+sys.exit(app.exec_())
